@@ -33,6 +33,7 @@ to setup
   create-predators init-shark [
     set color red
     set shape "shark"
+    set size 2
     setxy random-xcor random-ycor
     set energy shark-energy
   ]
