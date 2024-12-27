@@ -1,13 +1,8 @@
-globals [
+patches-own [
+  habitat-type
   sunlight-level
   temperature
   nutrient-level
-  pollution-level
-  fishing-pressure
-]
-
-patches-own [
-  habitat-type
 ]
 
 turtles-own [energy]
@@ -20,30 +15,31 @@ breed [sharks shark] ;; top predators in the ecosystem. They eat small fishes to
 to setup
   clear-all
 
-  ;; Set environment params
-  set sunlight-level 1.0
-  set temperature 25
-  set nutrient-level 1.0
-  set pollution-level 0.2
-  set fishing-pressure 0.1
-
   ;; Set habitat zones
   ask patches [
+    ;; initiate patch nutrient level
+    set nutrient-level nutrient-init
 
     ;; under 1000m
     if pycor < 0 [
       set habitat-type "aphotic"
       set pcolor blue - 2
+      set sunlight-level 0
+      set temperature surface-temperature - 20
     ]
     ;; between 200 and 1000m
     if pycor >= 0 and pycor < max-pycor / 2 [
       set habitat-type "dysphotic"
       set pcolor blue
+      set sunlight-level 0.5
+      set temperature surface-temperature - 10
     ]
     ;; top 200 m
     if pycor >= max-pycor / 2 [
       set habitat-type "euphotic"
       set pcolor blue + 2
+      set sunlight-level 1
+      set temperature surface-temperature
     ]
   ]
 
@@ -55,37 +51,53 @@ to setup
     setxy random-xcor random-ycor
     ;; float (max-pycor - min-pycor) * 0.33 + (max-pycor * 2/3) - 1
   ]
-
+  ;; zooplanktons
   create-zooplanktons zooplankton-init [
     set color cyan
     set shape "dot"
     setxy random-xcor random-ycor
-    set energy 5
+    set energy zooplankton-max-energy
   ]
-
+  ;; small-fishes
   create-small-fishes small-fish-init [
     set color orange
     set shape "fish"
     setxy random-xcor random-ycor
-    set energy 15
+    set energy small-fish-max-energy
   ]
-
+  ;; sharks
   create-sharks shark-init [
     set color black
     set shape "shark"
     set size 2
     setxy random-xcor random-ycor
-    set energy 20
+    set energy shark-max-energy
   ]
 
   reset-ticks
 end
 
 to go
-  ask patches [
-    grow
+  ;; population reproduction after every 100 tick
+  if ticks mod 100 = 0 [
+    ask patches [
+      grow
+    ]
+
+    ask zooplanktons [
+      zooplanktons-reprod
+    ]
+
+    ask small-fishes [
+      small-fish-reprod
+    ]
+
+    ask sharks [
+      sharks-reprod
+    ]
   ]
 
+  ;; ecosystem
   ask zooplanktons [
     move
     eat-phytoplankton
@@ -94,7 +106,7 @@ to go
   ask small-fishes [
     move
     eat-zooplankton
-    impacted-by-fishing
+    small-fish-reprod
   ]
 
   ask sharks [
@@ -108,26 +120,35 @@ to go
 end
 
 to grow
-  if (sunlight-level > 0.5 and nutrient-level > 0.5) [
+  ;; phytoplanktons needs sunlights and nutrients to grow
+  if (sunlight-level > 0 and nutrient-level > 2) and random 100 < 50 [
     sprout-phytoplanktons 1 [
       set color green
       set shape "circle"
-      setxy random-xcor random-ycor
+      setxy xcor ycor
+      set nutrient-level nutrient-level - 2
     ]
   ]
 end
 
 to move
-  rt random 50
-  lt random 50
+  ;; change direction randomly
+  set heading random 180
+  ;; advance by 1
   fd 1
 end
 
 to eat-phytoplankton
-  let prey one-of phytoplanktons-here
-  if prey != nobody [
-    ask prey [ die ]
-    set energy energy + 5
+  let food one-of phytoplanktons-here
+  ;; check if there is a phytoplankton on the same patch
+  if food != nobody [
+    ;; remove phytoplankton
+    ask food [ die ]
+    ;; increase zooplankton's energy
+    set energy energy + 2
+    if energy > zooplankton-max-energy [set energy zooplankton-max-energy]
+    ;; increase nutrient level of current patch
+    ask patch-here [set nutrient-level nutrient-level + 1]
   ]
 end
 
@@ -135,7 +156,9 @@ to eat-zooplankton
   let prey one-of zooplanktons-here
   if prey != nobody [
     ask prey [ die ]
-    set energy energy + 10
+    set energy energy + 5
+    if energy > small-fish-max-energy [set energy small-fish-max-energy]
+    ask patch-here [set nutrient-level nutrient-level + 3]
   ]
 end
 
@@ -144,28 +167,76 @@ to eat-small-fish
   if prey != nobody [
     ask prey [ die ]
     set energy energy + 15
+    if energy > shark-max-energy [set energy shark-max-energy]
+    ask patch-here [set nutrient-level nutrient-level + 5]
   ]
 end
 
 to apply-human-impacts
   ask phytoplanktons [
-    if random-float 1 < pollution-level [
+    if random 100 < pollution-level [
       die
     ]
   ]
 
   ask small-fishes [
-    if random-float 1 < fishing-pressure [
+    if random 100 < fishing-pressure [
+      die
+    ]
+  ]
+
+   ask sharks [
+    if random 1000 < fishing-pressure [
       die
     ]
   ]
 end
 
-to impacted-by-fishing
-  if random-float 1 < fishing-pressure [
-    die
+;; reproduction of species
+to zooplanktons-reprod
+
+  if energy = zooplankton-max-energy and random 100 < temperature [
+    set energy energy / 2
+    hatch 1 [
+      set energy zooplankton-max-energy / 2
+    ]
   ]
+
 end
+
+to small-fish-reprod
+
+  ;; lock for neighbors to bread
+  let mate one-of other small-fishes in-radius 1
+  if mate != nobody and random 100 < 20 [
+    set energy energy / 2
+    ask mate [ set energy energy / 2 ]
+    hatch-small-fishes 1 [
+      set color orange
+      set shape "fish"
+      set energy small-fish-max-energy
+    ]
+  ]
+
+end
+
+;; reproduction of species
+to sharks-reprod
+
+  ;; lock for neighbors to bread
+  let mate one-of other sharks in-radius 1
+  if mate != nobody and random 100 < 90 [
+    set energy energy / 2
+    ask mate [ set energy energy / 2 ]
+    hatch-sharks 1 [
+      set color black
+      set shape "shark"
+      set energy shark-max-energy
+    ]
+  ]
+
+end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -237,7 +308,7 @@ phytoplankton-init
 phytoplankton-init
 10
 200
-50.0
+100.0
 1
 1
 NIL
@@ -282,6 +353,111 @@ shark-init
 shark-init
 1
 50
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+725
+53
+907
+86
+surface-temperature
+surface-temperature
+0
+40
+20.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+968
+55
+1188
+88
+zooplankton-max-energy
+zooplankton-max-energy
+0
+100
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+971
+110
+1190
+143
+small-fish-max-energy
+small-fish-max-energy
+0
+100
+15.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+974
+170
+1194
+203
+shark-max-energy
+shark-max-energy
+0
+100
+20.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+726
+112
+898
+145
+nutrient-init
+nutrient-init
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+740
+327
+912
+360
+pollution-level
+pollution-level
+0
+100
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+740
+381
+912
+414
+fishing-pressure
+fishing-pressure
+0
+100
 10.0
 1
 1
