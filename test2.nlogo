@@ -131,6 +131,12 @@ to grow
   ]
 end
 
+to add-nutrient
+  ask patch-here [
+    set nutrient-level max list nutrient-level 2
+  ]
+end
+
 to move
   ;; change direction randomly
   set heading random 180
@@ -148,7 +154,7 @@ to eat-phytoplankton
     set energy energy + 2
     if energy > zooplankton-max-energy [set energy zooplankton-max-energy]
     ;; increase nutrient level of current patch
-    ask patch-here [set nutrient-level nutrient-level + 1]
+    add-nutrient
   ]
 end
 
@@ -158,7 +164,7 @@ to eat-zooplankton
     ask prey [ die ]
     set energy energy + 5
     if energy > small-fish-max-energy [set energy small-fish-max-energy]
-    ask patch-here [set nutrient-level nutrient-level + 3]
+    add-nutrient
   ]
 end
 
@@ -168,7 +174,7 @@ to eat-small-fish
     ask prey [ die ]
     set energy energy + 15
     if energy > shark-max-energy [set energy shark-max-energy]
-    ask patch-here [set nutrient-level nutrient-level + 5]
+    add-nutrient
   ]
 end
 
@@ -236,7 +242,6 @@ to sharks-reprod
   ]
 
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -463,6 +468,27 @@ fishing-pressure
 1
 NIL
 HORIZONTAL
+
+PLOT
+982
+295
+1404
+499
+plot 1
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -14439633 true "" "plot count phytolanktons"
+"pen-1" 1.0 0 -11221820 true "" "plot count zooplanktons"
+"pen-2" 1.0 0 -817084 true "" "plot count small-fishes"
+"pen-3" 1.0 0 -16777216 true "" "plot count sharks"
 
 @#$#@#$#@
 ## WHAT IS IT?
