@@ -81,7 +81,13 @@ to go
   ;; population reproduction after every 100 tick
   if ticks mod 100 = 0 [
     ask patches [
-      grow
+      ifelse any? phytoplanktons [
+        ask phytoplankton-here [
+          die
+        ]
+      ][
+        grow
+      ]
     ]
 
     ask zooplanktons [
@@ -99,18 +105,18 @@ to go
 
   ;; ecosystem
   ask zooplanktons [
-    move
+    ;;move
     eat-phytoplankton
   ]
 
   ask small-fishes [
-    move
+    ;;move
     eat-zooplankton
     small-fish-reprod
   ]
 
   ask sharks [
-    move
+    ;;move
     eat-small-fish
   ]
 
@@ -470,10 +476,10 @@ NIL
 HORIZONTAL
 
 PLOT
-982
-295
-1404
-499
+924
+223
+1346
+427
 plot 1
 NIL
 NIL
