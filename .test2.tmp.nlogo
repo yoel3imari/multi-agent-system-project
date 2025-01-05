@@ -195,7 +195,7 @@ end
 to zooplanktons-reprod
   let pop count zooplanktons
   if pop < zooplankton-max and random 100 < zooplankton-production-rate [
-    hatch 5 [
+    hatch  [
       rt random 360
       fd 1
     ]
