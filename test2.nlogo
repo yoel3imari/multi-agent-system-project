@@ -5,12 +5,12 @@ patches-own [
   nutrient-level
 ]
 
-globals [
-  small-fish-eating
-  small-fish-birth
+turtles-own [
+  energy
 ]
 
-turtles-own [energy]
+small-fishes-own [maturity]
+sharks-own [maturity]
 
 breed [phytoplanktons phytoplankton] ;; Phytoplanktons are tiny plants that use sunlight and nutrients to grow.
 breed [zooplanktons zooplankton] ;; tiny animals that eat phytoplanktons to gain energy and are food for small fishes.
@@ -19,8 +19,6 @@ breed [sharks shark] ;; top predators in the ecosystem. They eat small fishes to
 
 to setup
   clear-all
-  set small-fish-eating 0
-  set small-fish-birth 0
   ;; Set habitat zones
   ask patches [
     ;; initiate patch nutrient level
@@ -69,6 +67,7 @@ to setup
     set shape "fish"
     setxy random-xcor random-ycor
     set energy (2 * small-fish-gain-from-food)
+    set maturity (4 * small-fish-gain-from-food)
   ]
   ;; sharks
   create-sharks shark-init [
@@ -77,6 +76,7 @@ to setup
     set size 2
     setxy random-xcor random-ycor
     set energy (2 * shark-gain-from-food)
+    set maturity (4 * shark-gain-from-food)
   ]
 
   reset-ticks
@@ -127,10 +127,10 @@ end
 
 ;; grow a new phytoplankton
 to growing ;; patches procedure
-  ;; phytoplanktons needs sunlights and nutrients to grow
-  if (sunlight-level = 1 and nutrient-level >= 2 and random 100 < 50)
-  or (sunlight-level = 0.5 and nutrient-level >= 2 and random 100 < 25)
-  or (sunlight-level = 0 and nutrient-level >= 2 and random 100 < 5) [
+  ;; phytoplanktons needs sunlights, nutrients and clean water to grow
+  if (sunlight-level = 1 and nutrient-level >= 2 and random 100 > pollution-level and random 100 < 75)
+  or (sunlight-level = 0.5 and nutrient-level >= 2 and random 100 > pollution-level and random 100 < 50)
+  or (sunlight-level = 0 and nutrient-level >= 2 and random 100 > pollution-level and random 100 < 25) [
     consume-nutrient
     sprout-phytoplanktons 1 [
       set color green
@@ -194,11 +194,20 @@ end
 
 to zooplanktons-reprod
   let pop count zooplanktons
-  if pop < zooplankton-max and random 100 < zooplankton-production-rate [
-    hatch 5 [
-      rt random 360
-      fd 1
+  ;pop < zooplankton-max and
+  if pop < zooplankton-max and energy > (zooplankton-gain-from-food * 2) and random 100 < zooplankton-production-rate [
+    ifelse pop < (zooplankton-max * 25 / 100) [
+      hatch 11 [
+        rt random 360
+        fd 1
+      ]
+    ][
+      hatch 5 [
+        rt random 360
+        fd 1
+      ]
     ]
+
     set energy energy / 2
   ]
 
@@ -209,7 +218,6 @@ to eat-zooplankton
   let prey one-of zooplanktons-here
   if prey != nobody [
     ask prey [ die ]
-    set small-fish-eating small-fish-eating + 1
     add-nutrient
     set energy energy + small-fish-gain-from-food
     ;;if energy > small-fish-max-energy [set energy small-fish-max-energy]
@@ -218,15 +226,21 @@ end
 
 to small-fish-reprod
   let pop count small-fishes
-  if pop < small-fish-max and random 100 < small-fish-production-rate [
-    hatch 1 [
-      rt random 360
-      fd 1
+  ;  pop < small-fish-max and
+  if pop < small-fish-max and energy >= maturity [
+    ifelse pop < (small-fish-max * 25 / 100) [
+      hatch 9 [
+        rt random 360
+        fd 1
+      ]
+    ][
+      hatch 4 [
+        rt random 360
+        fd 1
+      ]
     ]
-    set small-fish-birth small-fish-birth + 1
     set energy energy / 2
   ]
-
 end
 
 to eat-small-fish
@@ -241,10 +255,18 @@ end
 to sharks-reprod
   let pop count sharks
   ;; lock for neighbors to bread
-  if pop < shark-max and random 100 < shark-production-rate [
-    hatch 1 [
-      rt random 360
-      fd 1
+  ;pop < shark-max and
+  if pop < shark-max and energy >= maturity [
+    ifelse pop < (shark-max * 25 / 100) [
+      hatch 7 [
+        rt random 360
+        fd 1
+      ]
+    ][
+      hatch 3 [
+        rt random 360
+        fd 1
+      ]
     ]
     set energy energy / 2
   ]
@@ -265,7 +287,7 @@ to apply-human-impacts
   ]
 
    ask sharks [
-    if random 1000 < fishing-pressure [
+    if random 100 < fishing-pressure [
       die
     ]
   ]
@@ -341,7 +363,7 @@ phytoplankton-init
 phytoplankton-init
 10
 200
-100.0
+200.0
 1
 1
 NIL
@@ -380,13 +402,13 @@ HORIZONTAL
 SLIDER
 1163
 207
-1383
+1358
 240
 shark-init
 shark-init
 10
-50
-50.0
+200
+200.0
 1
 1
 NIL
@@ -394,9 +416,9 @@ HORIZONTAL
 
 SLIDER
 666
-16
-850
-49
+15
+845
+48
 surface-temperature
 surface-temperature
 0
@@ -404,7 +426,7 @@ surface-temperature
 20.0
 10
 1
-NIL
+°C
 HORIZONTAL
 
 SLIDER
@@ -440,13 +462,13 @@ HORIZONTAL
 SLIDER
 1164
 295
-1384
+1360
 328
 shark-gain-from-food
 shark-gain-from-food
 0
 100
-50.0
+100.0
 1
 1
 NIL
@@ -464,7 +486,7 @@ nutrient-init
 50.0
 1
 1
-NIL
+g
 HORIZONTAL
 
 SLIDER
@@ -476,10 +498,10 @@ pollution-level
 pollution-level
 0
 100
-0.0
+73.0
 1
 1
-NIL
+%
 HORIZONTAL
 
 SLIDER
@@ -491,17 +513,17 @@ fishing-pressure
 fishing-pressure
 0
 100
-10.0
+7.0
 1
 1
-NIL
+%
 HORIZONTAL
 
 PLOT
-876
-10
-1298
-177
+860
+15
+1360
+199
 Population
 NIL
 NIL
@@ -527,7 +549,7 @@ zooplankton-gain-from-food
 zooplankton-gain-from-food
 0
 100
-10.0
+100.0
 1
 1
 NIL
@@ -551,13 +573,13 @@ HORIZONTAL
 SLIDER
 1163
 252
-1382
+1359
 285
 shark-production-rate
 shark-production-rate
 1.0
-20.0
-10.0
+50.0
+50.0
 1
 1
 %
@@ -572,7 +594,7 @@ growth-countdown
 growth-countdown
 10
 100
-50.0
+47.0
 1
 1
 ticks
@@ -587,7 +609,7 @@ zooplankton-max
 zooplankton-max
 100
 200
-100.0
+200.0
 1
 1
 NIL
@@ -611,39 +633,17 @@ HORIZONTAL
 SLIDER
 1165
 335
-1383
+1361
 368
 shark-max
 shark-max
 10
-100
-100.0
+200
+200.0
 1
 1
 NIL
 HORIZONTAL
-
-MONITOR
-708
-440
-828
-485
-NIL
-small-fish-eating
-17
-1
-11
-
-MONITOR
-844
-439
-956
-484
-NIL
-small-fish-birth
-17
-1
-11
 
 @#$#@#$#@
 ## WHAT IS IT?
