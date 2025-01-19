@@ -1,125 +1,308 @@
-globals [ phytoplankton-growth-rate ]  ;; Growth rate of phytoplankton
+patches-own [
+  habitat-type
+  sunlight-level
+  temperature
+  nutrient-level
+]
 
 turtles-own [
   energy
 ]
 
-breed [ phytoplanktons phytoplankton ]
-breed [ herbivores herbivore ]
-breed [ predators predator ]
+small-fishes-own [maturity]
+sharks-own [maturity]
 
-;; Setup the world
+breed [phytoplanktons phytoplankton] ;; Phytoplanktons are tiny plants that use sunlight and nutrients to grow.
+breed [zooplanktons zooplankton] ;; tiny animals that eat phytoplanktons to gain energy and are food for small fishes.
+breed [small-fishes small-fish] ;; eat zooplanktons to survive and gain energy.
+breed [sharks shark] ;; top predators in the ecosystem. They eat small fishes to maintain their energy and survive.
+
 to setup
   clear-all
-  set phytoplankton-growth-rate 0.1  ;; Growth rate of phytoplankton
-
-  ;; Create phytoplankton
+  ;; Set habitat zones
   ask patches [
-    sprout-phytoplanktons 1 [
-      set color green
-      set size 0.5
+    ;; initiate patch nutrient level
+    set nutrient-level nutrient-init
+
+    ;; under 1000m
+    if pycor < 0 [
+      set habitat-type "aphotic"
+      set pcolor blue - 2
+      set sunlight-level 0
+      set temperature surface-temperature - 20
+    ]
+    ;; between 200 and 1000m
+    if pycor >= 0 and pycor < max-pycor / 2 [
+      set habitat-type "dysphotic"
+      set pcolor blue
+      set sunlight-level 0.5
+      set temperature surface-temperature - 10
+    ]
+    ;; top 200 m
+    if pycor >= max-pycor / 2 [
+      set habitat-type "euphotic"
+      set pcolor blue + 2
+      set sunlight-level 1
+      set temperature surface-temperature
     ]
   ]
 
-  ;; Create herbivores
-  create-herbivores init-fish [
-    set color blue
+  ;; Create species
+  ;; phytoplanktons
+  create-phytoplanktons phytoplankton-init [
+    set color green
+    set shape "circle"
+    setxy random-xcor random-ycor
+  ]
+  ;; zooplanktons
+  create-zooplanktons zooplankton-init [
+    set color cyan
+    set shape "dot"
+    setxy random-xcor random-ycor
+    set energy random (2 * zooplankton-gain-from-food)
+  ]
+  ;; small-fishes
+  create-small-fishes small-fish-init [
+    set color orange
     set shape "fish"
     setxy random-xcor random-ycor
-    set energy fish-energy
+    set energy (2 * small-fish-gain-from-food)
+    set maturity (4 * small-fish-gain-from-food)
   ]
-
-  ;; Create predators
-  create-predators init-shark [
-    set color red
+  ;; sharks
+  create-sharks shark-init [
+    set color black
     set shape "shark"
     set size 2
     setxy random-xcor random-ycor
-    set energy shark-energy
+    set energy (2 * shark-gain-from-food)
+    set maturity (4 * shark-gain-from-food)
   ]
 
   reset-ticks
 end
 
-;; The simulation loop
 to go
-  if not any? herbivores [ stop ]  ;; Stop if no herbivores remain
-  if not any? predators [ stop ]  ;; Stop if no predators remain
 
-  ;; Phytoplankton grows on patches
-  ask patches [
-    if (not any? phytoplanktons-here) and (random-float 1 < phytoplankton-growth-rate) [
-      sprout-phytoplanktons 1 [
-        set color green
-        set size 0.5
+  ;; phytoplankton lifecycle after countdown
+  if ticks mod growth-countdown = 0 [
+    ask patches [
+      ifelse any? turtles-here with [breed = phytoplanktons] [
+        ask turtles-here with [breed = phytoplanktons] [
+          die
+        ]
+      ][
+        growing
       ]
     ]
   ]
 
-  ;; Herbivores eat phytoplankton
-  ask herbivores [
+  ;; ecosystem
+  ask zooplanktons [
+    death
     move
-    set energy energy - 1  ;; Lose energy for moving
-    let food one-of phytoplanktons-here
-    if food != nobody [
-      ask food [ die ]  ;; Eat phytoplankton≠≠≠
-      set energy energy + 5
-    ]
-    if energy > 10 [ reproduce-herbivores ]
-    if energy <= 0 [ die ]  ;; Herbivore dies
+    eat-phytoplankton
+    zooplanktons-reprod
   ]
 
-  ;; Predators eat herbivores
-  ask predators [
+  ask small-fishes [
+    death
     move
-    set energy energy - 1  ;; Lose energy for moving
-    let prey one-of herbivores-here
-    if prey != nobody [
-      ask prey [ die ]  ;; Eat herbivore
-      set energy energy + 10
-    ]
-    if energy > shark-energy - 10 [ reproduce-predators ]
-    if energy <= 0 [ die ]  ;; Predator dies
+    eat-zooplankton
+    small-fish-reprod
   ]
+
+  ask sharks [
+    death
+    move
+    eat-small-fish
+    sharks-reprod
+  ]
+
+  apply-human-impacts
+  check-populations
 
   tick
 end
 
-;; Movement function for agents
-to move
-  rt random 50
-  lt random 50
-  fd 1
-end
-
-;; Herbivore reproduction
-to reproduce-herbivores
-  hatch 1 [
-    set energy energy / 2
-    rt random 360
-    fd 1
+;; grow a new phytoplankton
+to growing ;; patches procedure
+  ;; phytoplanktons needs sunlights, nutrients and clean water to grow
+  if (sunlight-level = 1 and nutrient-level >= 2 and random 100 > pollution-level and random 100 < 75)
+  or (sunlight-level = 0.5 and nutrient-level >= 2 and random 100 > pollution-level and random 100 < 50)
+  or (sunlight-level = 0 and nutrient-level >= 2 and random 100 > pollution-level and random 100 < 25) [
+    consume-nutrient
+    sprout-phytoplanktons 1 [
+      set color green
+      set shape "circle"
+      setxy xcor ycor
+    ]
   ]
 end
 
-;; Predator reproduction
-to reproduce-predators
-  hatch 1 [
+to add-nutrient ;; patch procedure
+  set nutrient-level nutrient-level + 2
+end
+
+to consume-nutrient ;; patch procedure
+  set nutrient-level nutrient-level - 2
+end
+
+to check-populations
+  ;; If zooplanktons, small-fishes and sharks are all extinct, stop the simulation
+  if (not any? small-fishes) and (not any? sharks) [
+    show "Animals are all extinct. Stopping simulation."
+    stop
+  ]
+end
+
+to death ;; turtles procedure
+  if energy <= 0 [die]
+end
+
+to move ;; turtles procedure
+  ;; Move forward
+  fd 1
+
+  ;; Check if the turtle is at the world's edge
+  if pxcor = max-pxcor or pxcor = min-pxcor [
+    ;; Reverse x-direction
+    set heading 180 - heading
+  ]
+  if pycor = max-pycor or pycor = min-pycor [
+    ;; Reverse y-direction
+    set heading 180 - heading
+  ]
+
+  set energy energy - 1
+end
+
+to eat-phytoplankton
+
+  let food one-of phytoplanktons-here
+  ;; check if there is a phytoplankton on the same patch
+  if food != nobody [
+    ;; remove phytoplankton
+    ask food [ die ]
+    ;; increase zooplankton's energy
+    set energy energy + zooplankton-gain-from-food
+    ;; increase nutrient level of current patch
+    add-nutrient
+  ]
+
+end
+
+to zooplanktons-reprod
+  let pop count zooplanktons
+  ;pop < zooplankton-max and
+  if pop < zooplankton-max and energy > (zooplankton-gain-from-food * 2) and random 100 < zooplankton-production-rate [
+    ifelse pop < (zooplankton-max * 25 / 100) [
+      hatch 11 [
+        rt random 360
+        fd 1
+      ]
+    ][
+      hatch 5 [
+        rt random 360
+        fd 1
+      ]
+    ]
+
     set energy energy / 2
-    rt random 360
-    fd 1
+  ]
+
+end
+
+to eat-zooplankton
+  ;;let prey one-of turtles-here with [breed = zooplanktons]
+  let prey one-of zooplanktons-here
+  if prey != nobody [
+    ask prey [ die ]
+    add-nutrient
+    set energy energy + small-fish-gain-from-food
+    ;;if energy > small-fish-max-energy [set energy small-fish-max-energy]
+  ]
+end
+
+to small-fish-reprod
+  let pop count small-fishes
+  ;  pop < small-fish-max and
+  if pop < small-fish-max and energy >= maturity [
+    ifelse pop < (small-fish-max * 25 / 100) [
+      hatch 9 [
+        rt random 360
+        fd 1
+      ]
+    ][
+      hatch 4 [
+        rt random 360
+        fd 1
+      ]
+    ]
+    set energy energy / 2
+  ]
+end
+
+to eat-small-fish
+  let prey one-of small-fishes-here
+  if prey != nobody [
+    ask prey [ die ]
+    set energy energy + shark-gain-from-food
+    add-nutrient
+  ]
+end
+
+to sharks-reprod
+  let pop count sharks
+  ;; lock for neighbors to bread
+  ;pop < shark-max and
+  if pop < shark-max and energy >= maturity [
+    ifelse pop < (shark-max * 25 / 100) [
+      hatch 7 [
+        rt random 360
+        fd 1
+      ]
+    ][
+      hatch 3 [
+        rt random 360
+        fd 1
+      ]
+    ]
+    set energy energy / 2
+  ]
+
+end
+
+to apply-human-impacts
+  ask phytoplanktons [
+    if random 100 < pollution-level [
+      die
+    ]
+  ]
+
+  ask small-fishes [
+    if random 100 < fishing-pressure [
+      die
+    ]
+  ]
+
+   ask sharks [
+    if random 100 < fishing-pressure [
+      die
+    ]
   ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-746
-547
+647
+448
 -1
 -1
-16.0
+13.0
 1
-16
+10
 1
 1
 1
@@ -138,12 +321,12 @@ ticks
 30.0
 
 BUTTON
-32
-63
-98
-96
+9
+14
+76
+47
 NIL
-setup\n
+setup
 NIL
 1
 T
@@ -155,10 +338,10 @@ NIL
 1
 
 BUTTON
-51
-148
-114
-181
+88
+14
+151
+47
 NIL
 go
 T
@@ -172,120 +355,291 @@ NIL
 1
 
 SLIDER
-905
-38
-1077
-71
-init-shark
-init-shark
-0
+11
+67
+183
 100
-10.0
+phytoplankton-init
+phytoplankton-init
+10
+200
+200.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-907
-90
-1079
-123
-init-fish
-init-fish
+665
+210
+911
+243
+zooplankton-init
+zooplankton-init
+10
+200
+200.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+926
+209
+1148
+242
+small-fish-init
+small-fish-init
+10
+200
+200.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+1163
+207
+1358
+240
+shark-init
+shark-init
+10
+200
+200.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+666
+15
+845
+48
+surface-temperature
+surface-temperature
 0
-100
+40
+20.0
+10
+1
+°C
+HORIZONTAL
+
+SLIDER
+664
+254
+913
+287
+zooplankton-production-rate
+zooplankton-production-rate
+1.0
+50.0
 50.0
 1
 1
-NIL
+%
 HORIZONTAL
 
 SLIDER
-908
-142
-1080
-175
-fish-energy
-fish-energy
-0
-100
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-909
-191
-1081
-224
-shark-energy
-shark-energy
-0
-100
+926
+252
+1147
+285
+small-fish-production-rate
+small-fish-production-rate
+1.0
+50.0
 50.0
 1
 1
-NIL
+%
 HORIZONTAL
 
 SLIDER
-910
-244
-1106
-277
-fish-reproduction-rate
-fish-reproduction-rate
-0
-100
-50.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-910
+1164
 295
-1118
+1360
 328
-shark-reproduction-rate
-shark-reproduction-rate
+shark-gain-from-food
+shark-gain-from-food
+0
+100
+100.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+666
+58
+847
+91
+nutrient-init
+nutrient-init
 0
 100
 50.0
 1
 1
+g
+HORIZONTAL
+
+SLIDER
+667
+101
+848
+134
+pollution-level
+pollution-level
+0
+100
+50.0
+1
+1
+%
+HORIZONTAL
+
+SLIDER
+666
+144
+847
+177
+fishing-pressure
+fishing-pressure
+0
+100
+15.0
+1
+1
+%
+HORIZONTAL
+
+PLOT
+860
+15
+1360
+199
+Population
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"pen-5" 1.0 0 -14439633 true "" "plot count phytolanktons"
+"pen-1" 1.0 0 -11221820 true "" "plot count zooplanktons"
+"pen-2" 1.0 0 -817084 true "" "plot count small-fishes"
+"pen-3" 1.0 0 -16777216 true "" "plot count sharks"
+
+SLIDER
+664
+296
+913
+329
+zooplankton-gain-from-food
+zooplankton-gain-from-food
+0
+100
+100.0
+1
+1
 NIL
 HORIZONTAL
 
 SLIDER
-930
-389
-1126
-422
-fish-consumption-rate
-fish-consumption-rate
-1
-8
-1.0
+926
+295
+1147
+328
+small-fish-gain-from-food
+small-fish-gain-from-food
+0
+100
+100.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-935
-452
-1143
-485
-shark-consumption-rate
-shark-consumption-rate
-1
-8
+1163
+252
+1359
+285
+shark-production-rate
+shark-production-rate
 1.0
+50.0
+50.0
+1
+1
+%
+HORIZONTAL
+
+SLIDER
+11
+111
+183
+144
+growth-countdown
+growth-countdown
+10
+100
+47.0
+1
+1
+ticks
+HORIZONTAL
+
+SLIDER
+666
+340
+914
+373
+zooplankton-max
+zooplankton-max
+100
+200
+200.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+928
+340
+1149
+373
+small-fish-max
+small-fish-max
+10
+200
+200.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+1165
+335
+1361
+368
+shark-max
+shark-max
+10
+200
+200.0
 1
 1
 NIL
